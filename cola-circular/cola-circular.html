@@ -1,0 +1,841 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cola Circular — Productor / Consumidor</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0e0f14;
+    --surface: #161820;
+    --surface2: #1e2028;
+    --border: rgba(255,255,255,0.07);
+    --border2: rgba(255,255,255,0.13);
+    --text: #e8e9f0;
+    --muted: #6b6e80;
+    --faint: #2e3040;
+    --blue: #4d8ef0;
+    --blue-bg: rgba(77,142,240,0.12);
+    --blue-border: rgba(77,142,240,0.35);
+    --teal: #2ecfa0;
+    --teal-bg: rgba(46,207,160,0.1);
+    --teal-border: rgba(46,207,160,0.3);
+    --amber: #f0a030;
+    --amber-bg: rgba(240,160,48,0.1);
+    --amber-border: rgba(240,160,48,0.35);
+    --red: #e05555;
+    --red-bg: rgba(224,85,85,0.1);
+    --radius: 10px;
+    --radius-sm: 6px;
+    --mono: 'JetBrains Mono', monospace;
+    --sans: 'DM Sans', sans-serif;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 32px 20px 48px;
+  }
+
+  header {
+    width: 100%;
+    max-width: 960px;
+    margin-bottom: 32px;
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+  .header-title {
+    font-family: var(--mono);
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--text);
+    letter-spacing: -0.5px;
+  }
+  .header-title span { color: var(--blue); }
+  .header-sub {
+    font-size: 13px;
+    color: var(--muted);
+    font-family: var(--mono);
+  }
+
+  .main { width: 100%; max-width: 960px; display: flex; flex-direction: column; gap: 20px; }
+
+  /* STATS ROW */
+  .stats-row {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0,1fr));
+    gap: 10px;
+  }
+  .stat {
+    background: var(--surface);
+    border: 0.5px solid var(--border);
+    border-radius: var(--radius);
+    padding: 14px 16px;
+  }
+  .stat-label {
+    font-size: 11px;
+    font-family: var(--mono);
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: .6px;
+    margin-bottom: 6px;
+  }
+  .stat-value {
+    font-size: 28px;
+    font-weight: 500;
+    font-family: var(--mono);
+    color: var(--text);
+  }
+  .stat-value.blue { color: var(--blue); }
+  .stat-value.teal { color: var(--teal); }
+  .stat-value.amber { color: var(--amber); }
+  .stat-value.red { color: var(--red); }
+
+  /* ACTOR LAYOUT */
+  .actor-layout {
+    display: grid;
+    grid-template-columns: 140px 1fr 140px;
+    gap: 16px;
+    align-items: start;
+  }
+
+  .actor-card {
+    background: var(--surface);
+    border: 0.5px solid var(--border);
+    border-radius: var(--radius);
+    padding: 14px;
+  }
+  .actor-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 12px;
+    padding-bottom: 10px;
+    border-bottom: 0.5px solid var(--border);
+  }
+  .actor-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .actor-dot.blue { background: var(--blue); box-shadow: 0 0 6px var(--blue); }
+  .actor-dot.teal { background: var(--teal); box-shadow: 0 0 6px var(--teal); }
+  .actor-name {
+    font-family: var(--mono);
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: .3px;
+  }
+  .actor-name.blue { color: var(--blue); }
+  .actor-name.teal { color: var(--teal); }
+  .actor-packets {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    min-height: 90px;
+  }
+  .pkt {
+    height: 28px;
+    border-radius: var(--radius-sm);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 500;
+    border: 0.5px solid;
+    transition: all .3s;
+  }
+  .pkt.blue { background: var(--blue-bg); border-color: var(--blue-border); color: var(--blue); }
+  .pkt.teal { background: var(--teal-bg); border-color: var(--teal-border); color: var(--teal); }
+  .pkt.empty { background: transparent; border-color: var(--border); color: var(--muted); font-size: 16px; }
+  .actor-status {
+    margin-top: 10px;
+    font-size: 10px;
+    font-family: var(--mono);
+    color: var(--muted);
+    text-align: center;
+  }
+
+  /* CENTER BUFFER PANEL */
+  .buffer-panel {
+    background: var(--surface);
+    border: 0.5px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px;
+  }
+  .buffer-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 14px;
+  }
+  .buffer-title {
+    font-family: var(--mono);
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: .6px;
+  }
+  .badge {
+    font-family: var(--mono);
+    font-size: 10px;
+    padding: 3px 8px;
+    border-radius: 20px;
+    font-weight: 700;
+    letter-spacing: .3px;
+  }
+  .badge.ok { background: rgba(46,207,160,.15); color: var(--teal); border: 0.5px solid var(--teal-border); }
+  .badge.full { background: var(--amber-bg); color: var(--amber); border: 0.5px solid var(--amber-border); }
+  .badge.empty-b { background: var(--red-bg); color: var(--red); border: 0.5px solid rgba(224,85,85,.3); }
+
+  /* CHANNELS */
+  .channels {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-bottom: 14px;
+  }
+  .channel {
+    background: var(--surface2);
+    border: 0.5px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 8px 10px;
+  }
+  .channel-label {
+    font-family: var(--mono);
+    font-size: 9px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: .5px;
+    margin-bottom: 6px;
+  }
+  .channel-track {
+    height: 28px;
+    background: var(--bg);
+    border-radius: var(--radius-sm);
+    position: relative;
+    overflow: hidden;
+    border: 0.5px solid var(--border);
+  }
+  .fly-pkt {
+    position: absolute;
+    top: 3px;
+    height: 22px;
+    width: 52px;
+    border-radius: var(--radius-sm);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: var(--mono);
+    font-size: 10px;
+    font-weight: 700;
+    border: 0.5px solid;
+    opacity: 0;
+    pointer-events: none;
+    transition: left .5s cubic-bezier(.4,0,.2,1), opacity .15s;
+  }
+  .fly-pkt.blue { background: var(--blue-bg); border-color: var(--blue-border); color: var(--blue); }
+  .fly-pkt.teal { background: var(--teal-bg); border-color: var(--teal-border); color: var(--teal); }
+  .fly-pkt.show { opacity: 1; }
+
+  /* BUFFER GRID */
+  .buf-grid {
+    display: grid;
+    grid-template-columns: repeat(8, minmax(0,1fr));
+    gap: 6px;
+    margin-bottom: 10px;
+  }
+  .slot {
+    aspect-ratio: 1;
+    border-radius: var(--radius-sm);
+    border: 0.5px solid var(--border);
+    background: var(--surface2);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    position: relative;
+    transition: background .25s, border-color .25s;
+  }
+  .slot.filled { background: var(--blue-bg); border-color: var(--blue-border); }
+  .slot.is-head { border-color: var(--teal) !important; border-width: 1.5px; }
+  .slot.is-tail { border-color: var(--blue) !important; border-width: 1.5px; }
+  .slot.is-both { border-color: var(--amber) !important; border-width: 1.5px; }
+  .slot-i {
+    font-family: var(--mono);
+    font-size: 9px;
+    color: var(--muted);
+  }
+  .slot-v {
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--blue);
+  }
+  .slot-p {
+    position: absolute;
+    top: 2px;
+    right: 3px;
+    font-family: var(--mono);
+    font-size: 8px;
+    font-weight: 700;
+  }
+  .slot-p.h { color: var(--teal); }
+  .slot-p.t { color: var(--blue); }
+  .slot-p.b { color: var(--amber); }
+
+  /* FILL BAR */
+  .fill-bar-wrap { margin-bottom: 10px; }
+  .fill-bar-label {
+    display: flex;
+    justify-content: space-between;
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--muted);
+    margin-bottom: 4px;
+  }
+  .fill-bar-track {
+    height: 5px;
+    background: var(--faint);
+    border-radius: 3px;
+    overflow: hidden;
+  }
+  .fill-bar-fill {
+    height: 100%;
+    border-radius: 3px;
+    transition: width .4s ease, background .4s;
+    background: var(--blue);
+  }
+
+  /* LEGEND */
+  .legend {
+    display: flex;
+    gap: 14px;
+    flex-wrap: wrap;
+  }
+  .leg {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--muted);
+  }
+  .leg-sq {
+    width: 10px; height: 10px;
+    border-radius: 2px;
+    border: 1px solid;
+    flex-shrink: 0;
+  }
+
+  /* CONTROLS */
+  .controls {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    cursor: pointer;
+    padding: 9px 18px;
+    border-radius: var(--radius-sm);
+    border: 0.5px solid var(--border2);
+    background: var(--surface);
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 12px;
+    font-weight: 500;
+    transition: background .15s, transform .1s, border-color .15s;
+    letter-spacing: .2px;
+  }
+  .btn:hover { background: var(--surface2); border-color: var(--border2); }
+  .btn:active { transform: scale(.97); }
+  .btn:disabled { opacity: .3; cursor: not-allowed; pointer-events: none; }
+  .btn.produce { border-color: var(--blue-border); color: var(--blue); }
+  .btn.produce:hover { background: var(--blue-bg); }
+  .btn.consume { border-color: var(--teal-border); color: var(--teal); }
+  .btn.consume:hover { background: var(--teal-bg); }
+  .btn.auto-on { background: var(--amber-bg); border-color: var(--amber-border); color: var(--amber); }
+
+  .speed-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-left: auto;
+  }
+  .speed-group label {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--muted);
+  }
+  input[type=range] {
+    width: 90px;
+    accent-color: var(--blue);
+    cursor: pointer;
+  }
+  .speed-val {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--blue);
+    min-width: 22px;
+  }
+
+  /* LOG */
+  .log-section {
+    background: var(--surface);
+    border: 0.5px solid var(--border);
+    border-radius: var(--radius);
+    padding: 14px 16px;
+  }
+  .log-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 10px;
+    padding-bottom: 8px;
+    border-bottom: 0.5px solid var(--border);
+  }
+  .log-title {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: .5px;
+  }
+  .log-clear {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--muted);
+    cursor: pointer;
+    padding: 2px 8px;
+    border: 0.5px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: none;
+    transition: border-color .15s, color .15s;
+  }
+  .log-clear:hover { border-color: var(--border2); color: var(--text); }
+  .log-list {
+    max-height: 140px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+  }
+  .log-list::-webkit-scrollbar { width: 3px; }
+  .log-list::-webkit-scrollbar-track { background: transparent; }
+  .log-list::-webkit-scrollbar-thumb { background: var(--faint); border-radius: 2px; }
+  .log-entry {
+    font-family: var(--mono);
+    font-size: 11px;
+    padding: 4px 0;
+    color: var(--muted);
+    border-bottom: 0.5px solid var(--border);
+    display: flex;
+    gap: 12px;
+    align-items: baseline;
+  }
+  .log-entry:last-child { border-bottom: none; }
+  .log-entry.prod { color: #6aa8f5; }
+  .log-entry.cons { color: #3dc99a; }
+  .log-entry.warn { color: var(--amber); }
+  .log-ts { color: var(--muted); font-size: 10px; flex-shrink: 0; }
+  .log-msg { flex: 1; }
+
+  @keyframes pulse-slot {
+    0% { box-shadow: 0 0 0 0 rgba(77,142,240,.5); }
+    70% { box-shadow: 0 0 0 5px rgba(77,142,240,0); }
+    100% { box-shadow: 0 0 0 0 rgba(77,142,240,0); }
+  }
+  .slot.flash { animation: pulse-slot .4s ease; }
+
+  @media (max-width: 640px) {
+    .actor-layout { grid-template-columns: 1fr; }
+    .stats-row { grid-template-columns: repeat(2,1fr); }
+    .channels { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <div class="header-title">cola_circular<span>.buffer</span></div>
+    <div class="header-sub" style="margin-top:4px">Productor / Consumidor — buffer acotado (size = 8)</div>
+  </div>
+  <div class="header-sub" id="clock" style="align-self:center"></div>
+</header>
+
+<div class="main">
+
+  <div class="stats-row">
+    <div class="stat">
+      <div class="stat-label">ocupados</div>
+      <div class="stat-value blue" id="s-count">0</div>
+    </div>
+    <div class="stat">
+      <div class="stat-label">libres</div>
+      <div class="stat-value teal" id="s-free">8</div>
+    </div>
+    <div class="stat">
+      <div class="stat-label">producidos</div>
+      <div class="stat-value" id="s-produced">0</div>
+    </div>
+    <div class="stat">
+      <div class="stat-label">consumidos</div>
+      <div class="stat-value" id="s-consumed">0</div>
+    </div>
+  </div>
+
+  <div class="actor-layout">
+
+    <!-- PRODUCTOR -->
+    <div class="actor-card">
+      <div class="actor-header">
+        <div class="actor-dot blue" id="prod-dot"></div>
+        <div class="actor-name blue">productor</div>
+      </div>
+      <div class="actor-packets" id="prod-packets"></div>
+      <div class="actor-status" id="prod-status">en espera</div>
+    </div>
+
+    <!-- BUFFER CENTRAL -->
+    <div class="buffer-panel">
+      <div class="buffer-top">
+        <span class="buffer-title">buffer circular</span>
+        <span class="badge ok" id="buf-badge">● listo</span>
+      </div>
+
+      <div class="channels">
+        <div class="channel">
+          <div class="channel-label">▶ escribe (tail)</div>
+          <div class="channel-track" id="track-w">
+            <div class="fly-pkt blue" id="fly-w">--</div>
+          </div>
+        </div>
+        <div class="channel">
+          <div class="channel-label">◀ lee (head)</div>
+          <div class="channel-track" id="track-r">
+            <div class="fly-pkt teal" id="fly-r">--</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="buf-grid" id="buf-grid"></div>
+
+      <div class="fill-bar-wrap">
+        <div class="fill-bar-label">
+          <span>ocupación</span>
+          <span id="fill-pct">0%</span>
+        </div>
+        <div class="fill-bar-track">
+          <div class="fill-bar-fill" id="fill-bar" style="width:0%"></div>
+        </div>
+      </div>
+
+      <div class="legend">
+        <div class="leg"><div class="leg-sq" style="background:var(--blue-bg);border-color:var(--blue)"></div>lleno</div>
+        <div class="leg"><div class="leg-sq" style="background:var(--surface2);border-color:var(--border2)"></div>vacío</div>
+        <div class="leg"><div class="leg-sq" style="border-color:var(--teal);background:transparent"></div>H head</div>
+        <div class="leg"><div class="leg-sq" style="border-color:var(--blue);background:transparent"></div>T tail</div>
+        <div class="leg"><div class="leg-sq" style="border-color:var(--amber);background:transparent"></div>H/T</div>
+      </div>
+    </div>
+
+    <!-- CONSUMIDOR -->
+    <div class="actor-card">
+      <div class="actor-header">
+        <div class="actor-dot teal" id="cons-dot"></div>
+        <div class="actor-name teal">consumidor</div>
+      </div>
+      <div class="actor-packets" id="cons-packets"></div>
+      <div class="actor-status" id="cons-status">en espera</div>
+    </div>
+
+  </div>
+
+  <!-- CONTROLS -->
+  <div class="controls">
+    <button class="btn produce" id="btn-produce" onclick="manualProduce()">▶ Producir</button>
+    <button class="btn consume" id="btn-consume" onclick="manualConsume()">◀ Consumir</button>
+    <button class="btn" id="btn-auto" onclick="toggleAuto()">⏵ Auto</button>
+    <button class="btn" onclick="resetAll()">↺ Reiniciar</button>
+    <div class="speed-group">
+      <label for="spd">velocidad</label>
+      <input type="range" id="spd" min="1" max="6" value="2" step="1" oninput="setSpeed(+this.value)">
+      <span class="speed-val" id="spd-lbl">2×</span>
+    </div>
+  </div>
+
+  <!-- LOG -->
+  <div class="log-section">
+    <div class="log-header">
+      <span class="log-title">● consola de eventos</span>
+      <button class="log-clear" onclick="clearLog()">limpiar</button>
+    </div>
+    <div class="log-list" id="log-list"></div>
+  </div>
+
+</div>
+
+<script>
+const SIZE = 8;
+let buf = new Array(SIZE).fill(null);
+let head = 0, tail = 0, count = 0, nextVal = 1;
+let totalProd = 0, totalCons = 0;
+let autoMode = false, autoTimer = null, speed = 2, autoTick = 0;
+let flying = false;
+let prodHistory = [], consHistory = [];
+let logs = [];
+
+function buildGrid() {
+  const g = document.getElementById('buf-grid');
+  g.innerHTML = '';
+  for (let i = 0; i < SIZE; i++) {
+    const s = document.createElement('div');
+    s.className = 'slot';
+    s.id = 'sl' + i;
+    s.innerHTML = `<span class="slot-p" id="sp${i}"></span><span class="slot-i">${i}</span><span class="slot-v" id="sv${i}"></span>`;
+    g.appendChild(s);
+  }
+}
+
+function renderGrid() {
+  for (let i = 0; i < SIZE; i++) {
+    const s = document.getElementById('sl' + i);
+    const v = document.getElementById('sv' + i);
+    const p = document.getElementById('sp' + i);
+    s.className = 'slot' + (buf[i] ? ' filled' : '');
+    v.textContent = buf[i] || '';
+    const iH = i === head, iT = i === tail;
+    if (iH && iT) {
+      s.classList.add('is-both');
+      p.textContent = 'H/T'; p.className = 'slot-p b';
+    } else if (iH) {
+      s.classList.add('is-head');
+      p.textContent = 'H'; p.className = 'slot-p h';
+    } else if (iT) {
+      s.classList.add('is-tail');
+      p.textContent = 'T'; p.className = 'slot-p t';
+    } else {
+      p.textContent = ''; p.className = 'slot-p';
+    }
+  }
+}
+
+function renderActors() {
+  function drawQueue(elId, items, cls) {
+    const el = document.getElementById(elId);
+    el.innerHTML = '';
+    const show = items.slice(-3).reverse();
+    show.forEach(v => {
+      const d = document.createElement('div');
+      d.className = `pkt ${cls}`;
+      d.textContent = v;
+      el.appendChild(d);
+    });
+    for (let i = show.length; i < 3; i++) {
+      const d = document.createElement('div');
+      d.className = 'pkt empty';
+      d.textContent = '—';
+      el.appendChild(d);
+    }
+  }
+  drawQueue('prod-packets', prodHistory, 'blue');
+  drawQueue('cons-packets', consHistory, 'teal');
+}
+
+function renderStats() {
+  const full = count === SIZE, empty = count === 0;
+  document.getElementById('s-count').textContent = count;
+  document.getElementById('s-free').textContent = SIZE - count;
+  document.getElementById('s-produced').textContent = totalProd;
+  document.getElementById('s-consumed').textContent = totalCons;
+
+  const pct = Math.round((count / SIZE) * 100);
+  document.getElementById('fill-pct').textContent = pct + '%';
+  const bar = document.getElementById('fill-bar');
+  bar.style.width = pct + '%';
+  bar.style.background = full ? 'var(--amber)' : empty ? 'var(--red)' : 'var(--blue)';
+
+  const badge = document.getElementById('buf-badge');
+  if (full) { badge.className = 'badge full'; badge.textContent = '⚠ lleno'; }
+  else if (empty) { badge.className = 'badge empty-b'; badge.textContent = '○ vacío'; }
+  else { badge.className = 'badge ok'; badge.textContent = '● listo'; }
+
+  document.getElementById('btn-produce').disabled = full;
+  document.getElementById('btn-consume').disabled = empty;
+
+  document.getElementById('prod-status').textContent = full ? '⏸ bloqueado (lleno)' : 'activo';
+  document.getElementById('prod-status').style.color = full ? 'var(--amber)' : 'var(--muted)';
+  document.getElementById('cons-status').textContent = empty ? '⏸ bloqueado (vacío)' : 'activo';
+  document.getElementById('cons-status').style.color = empty ? 'var(--red)' : 'var(--muted)';
+}
+
+function speedMs() { return Math.round(1000 / speed); }
+
+function animateFly(trackId, flyId, label, onDone) {
+  const fly = document.getElementById(flyId);
+  const track = document.getElementById(trackId);
+  const tw = track.offsetWidth;
+  const endLeft = tw - 58;
+  fly.textContent = label;
+  fly.style.transition = 'none';
+  fly.style.left = '2px';
+  fly.classList.add('show');
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    fly.style.transition = `left ${Math.round(speedMs() * .55)}ms cubic-bezier(.4,0,.2,1), opacity .15s`;
+    fly.style.left = endLeft + 'px';
+    setTimeout(() => {
+      fly.classList.remove('show');
+      if (onDone) onDone();
+    }, Math.round(speedMs() * .65));
+  }));
+}
+
+function flashSlot(idx) {
+  const s = document.getElementById('sl' + idx);
+  s.classList.add('flash');
+  setTimeout(() => s.classList.remove('flash'), 500);
+}
+
+function produce() {
+  if (count === SIZE) { addLog('productor bloqueado — buffer lleno', 'warn'); renderStats(); return; }
+  const val = 'P' + String(nextVal++).padStart(2, '0');
+  const slotIdx = tail;
+  prodHistory.push(val);
+  if (prodHistory.length > 6) prodHistory.shift();
+  renderActors();
+  animateFly('track-w', 'fly-w', val, () => {
+    buf[slotIdx] = val;
+    tail = (tail + 1) % SIZE;
+    count++;
+    totalProd++;
+    flashSlot(slotIdx);
+    addLog(`→ escribe "${val}" → slot[${slotIdx}]  tail=${tail}  count=${count}`, 'prod');
+    renderGrid();
+    renderStats();
+    flying = false;
+  });
+  flying = true;
+}
+
+function consume() {
+  if (count === 0) { addLog('consumidor bloqueado — buffer vacío', 'warn'); renderStats(); return; }
+  const val = buf[head];
+  const slotIdx = head;
+  animateFly('track-r', 'fly-r', val, () => {
+    buf[slotIdx] = null;
+    head = (head + 1) % SIZE;
+    count--;
+    totalCons++;
+    consHistory.push(val);
+    if (consHistory.length > 6) consHistory.shift();
+    addLog(`← lee "${val}" ← slot[${slotIdx}]  head=${head}  count=${count}`, 'cons');
+    renderGrid();
+    renderStats();
+    renderActors();
+    flying = false;
+  });
+  flying = true;
+}
+
+function manualProduce() { if (!flying) produce(); }
+function manualConsume() { if (!flying) consume(); }
+
+function toggleAuto() {
+  autoMode = !autoMode;
+  const btn = document.getElementById('btn-auto');
+  if (autoMode) {
+    btn.className = 'btn auto-on';
+    btn.textContent = '⏸ Pausar';
+    scheduleAuto();
+  } else {
+    btn.className = 'btn';
+    btn.textContent = '⏵ Auto';
+    clearTimeout(autoTimer);
+  }
+}
+
+function scheduleAuto() {
+  if (!autoMode) return;
+  autoTimer = setTimeout(() => {
+    if (!flying) {
+      autoTick++;
+      if (count === SIZE) consume();
+      else if (count === 0) produce();
+      else { if (autoTick % 3 === 0) consume(); else produce(); }
+    }
+    scheduleAuto();
+  }, speedMs());
+}
+
+function setSpeed(v) {
+  speed = v;
+  document.getElementById('spd-lbl').textContent = v + '×';
+  if (autoMode) { clearTimeout(autoTimer); scheduleAuto(); }
+}
+
+function resetAll() {
+  autoMode = false;
+  clearTimeout(autoTimer);
+  document.getElementById('btn-auto').className = 'btn';
+  document.getElementById('btn-auto').textContent = '⏵ Auto';
+  buf = new Array(SIZE).fill(null);
+  head = 0; tail = 0; count = 0; nextVal = 1;
+  totalProd = 0; totalCons = 0;
+  prodHistory = []; consHistory = []; logs = [];
+  flying = false;
+  document.getElementById('log-list').innerHTML = '';
+  renderGrid(); renderStats(); renderActors();
+  addLog('— simulador reiniciado  size=8  head=0  tail=0', '');
+}
+
+function addLog(msg, cls = '') {
+  const now = new Date();
+  const ts = now.toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  logs.unshift({ ts, msg, cls });
+  if (logs.length > 60) logs.pop();
+  const el = document.getElementById('log-list');
+  el.innerHTML = logs.map(l =>
+    `<div class="log-entry ${l.cls}"><span class="log-ts">${l.ts}</span><span class="log-msg">${l.msg}</span></div>`
+  ).join('');
+}
+
+function clearLog() {
+  logs = [];
+  document.getElementById('log-list').innerHTML = '';
+}
+
+function updateClock() {
+  const t = new Date().toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  document.getElementById('clock').textContent = t;
+}
+
+buildGrid();
+renderGrid();
+renderStats();
+renderActors();
+addLog('— simulador iniciado  size=8  head=0  tail=0');
+setInterval(updateClock, 1000);
+updateClock();
+</script>
+</body>
+</html>
